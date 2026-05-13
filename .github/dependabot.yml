@@ -1,0 +1,53 @@
+# Dependabot configuration for xcprivacy-lint.
+#
+# Tracks two dependency surfaces:
+#   1. Swift packages declared in Package.swift (Yams, swift-argument-parser)
+#   2. GitHub Actions used by .github/workflows/*.yml (actions/checkout, etc.)
+#
+# Both ecosystems get a weekly check; minor/patch updates auto-PR, major
+# updates auto-PR with the breaking-change indicator in the PR body so we
+# can review before merging. Dependabot opens at most 5 open PRs per
+# ecosystem at any time to avoid PR-list spam.
+#
+# See https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+version: 2
+
+updates:
+  # ---- Swift Package Manager dependencies ------------------------------
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Vancouver"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "swift"
+    groups:
+      # Bundle all Swift dependency updates into one PR per week so the
+      # PR list stays clean. Breaks out into individual PRs only when
+      # multiple ecosystems have updates at once.
+      swift-dependencies:
+        patterns:
+          - "*"
+
+  # ---- GitHub Actions workflow dependencies ----------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Vancouver"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
