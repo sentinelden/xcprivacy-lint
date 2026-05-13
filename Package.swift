@@ -33,7 +33,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
         // YAML decoder for the symbol→category map at Resources/symbols.yaml.
         // Yams is the canonical Swift YAML library and stable enough to pin.
-        .package(url: "https://github.com/jpsim/Yams", from: "5.0.0")
+        .package(url: "https://github.com/jpsim/Yams", from: "6.2.1")
     ],
     targets: [
         // ── CLI executable ─────────────────────────────────────────────────
