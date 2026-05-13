@@ -12,8 +12,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode 16
-        run: sudo xcode-select -s /Applications/Xcode_16.app
+      # GitHub's macOS-14 runners ship multiple Xcode 16.x point releases
+      # under /Applications/Xcode_16.<x>.app. We pick the highest-installed
+      # one so the workflow keeps working as runners update without us
+      # having to bump a hard-coded version. Falls back gracefully: if no
+      # Xcode 16 is found, the system-default Xcode is used.
+      - name: Select Xcode 16 (latest available)
+        run: |
+          XCODE_PATH=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -rV | head -1)
+          if [ -n "$XCODE_PATH" ]; then
+            echo "Selecting $XCODE_PATH"
+            sudo xcode-select -s "$XCODE_PATH"
+          else
+            echo "No Xcode 16.x found; using runner default ($(xcode-select -p))"
+          fi
 
       - name: Swift version
         run: swift --version
