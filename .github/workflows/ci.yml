@@ -10,7 +10,7 @@ jobs:
   build-and-test:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # GitHub's macOS-14 runners ship multiple Xcode 16.x point releases
       # under /Applications/Xcode_16.<x>.app. We pick the highest-installed
