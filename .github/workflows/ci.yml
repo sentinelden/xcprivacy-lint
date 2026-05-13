@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Test
+        run: swift test --parallel
+
+      - name: Smoke-test the CLI
+        run: |
+          ./.build/release/xcprivacy-lint --version
+          ./.build/release/xcprivacy-lint --help
+
+# Future: an `apple-docs-watch` job will hash Apple's required-reason API
+# docs page on a weekly cron and open a maintenance issue when the page
+# changes, prompting a manual sync of Resources/symbols.yaml. Not yet
+# implemented; will land as its own workflow file rather than a dead
+# placeholder here.

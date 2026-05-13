@@ -1,0 +1,141 @@
+# symbols.yaml — symbol → required-reason API category mapping.
+#
+# Update this file when Apple announces a new required-reason category or new
+# symbols within an existing one. Source of truth:
+#
+#   https://developer.apple.com/documentation/bundleresources/privacy_manifest_files/describing_use_of_required_reason_api
+#
+# Schema (loaded by CategoryResolver):
+#
+#   - category: NSPrivacyAccessedAPICategoryX
+#     valid_reasons: [reason-code-1, reason-code-2, ...]
+#     symbols:                          # exact-match C/Swift symbol names
+#       - sym_a
+#       - sym_b
+#     objc_methods:                     # class + selector pairs
+#       - class: NSClassName
+#         methods:
+#           - selectorName:withSomething:
+#     notes: |
+#       Free-form contributor notes. Surface in --verbose output and in the
+#       "suggested reasons" copy of missing-declaration findings.
+#
+# v0.1 ships with the five categories Apple currently publishes. Coverage is
+# intentionally narrow at this point — PRs adding symbols welcome, with each
+# new symbol citing the Apple-docs URL that supports the mapping.
+
+- category: NSPrivacyAccessedAPICategoryFileTimestamp
+  valid_reasons: [0A2A.1, 3B52.1, 8FFB.1, C617.1, DDA9.1]
+  symbols:
+    - getattrlist
+    - getattrlistbulk
+    - fgetattrlist
+    - stat
+    - lstat
+    - fstat
+    - fstatat
+  objc_methods:
+    - class: NSFileManager
+      methods:
+        - attributesOfItemAtPath:error:
+        - modificationDate
+    - class: NSURL
+      methods:
+        - getResourceValue:forKey:error:
+        - resourceValuesForKeys:error:
+  notes: |
+    Triggered by file-timestamp reads via FileManager APIs or lower-level
+    POSIX calls. Reason codes:
+      0A2A.1 — Display file timestamps to the user
+      3B52.1 — Inside-app functionality needing file timestamps (e.g.,
+               jailbreak filesystem checks targeting paths outside the
+               app's container)
+      8FFB.1 — Inside-app optimization (caching by timestamp)
+      C617.1 — Files inside the app container, app group, or temp dir
+               (most common case for in-app persistence)
+      DDA9.1 — Apple Music API
+    SDK-specific guidance: SentinelSDK uses 3B52.1 (out-of-container jailbreak
+    checks); EnclaveVault + AgenticGuard use C617.1 (in-container writes).
+
+- category: NSPrivacyAccessedAPICategorySystemBootTime
+  valid_reasons: [35F9.1, 8FFB.1, 3D61.1]
+  symbols:
+    - mach_absolute_time
+    - mach_continuous_time
+  objc_methods:
+    - class: NSProcessInfo
+      methods:
+        - systemUptime
+  notes: |
+    Triggered by reading system boot time / uptime, typically via
+    `ProcessInfo.systemUptime` (Swift) or `mach_absolute_time()` (C).
+    Reason codes:
+      35F9.1 — Time elapsed within the app, never sent off-device (the
+               correct code for uptime-anchored license clocks)
+      8FFB.1 — Inside-app optimization
+      3D61.1 — Absolute timestamps for in-app events that may leave the device
+    SDK-specific guidance: all four Sentinel Den SDKs use 35F9.1 — their
+    uptime reads are consumed locally for license clock validation and never
+    transmitted.
+
+- category: NSPrivacyAccessedAPICategoryDiskSpace
+  valid_reasons: [85F4.1, E174.1, 7D9E.1, B728.1]
+  symbols:
+    - statfs
+    - statvfs
+    - fstatfs
+    - fstatvfs
+    - getattrlistat
+  objc_methods:
+    - class: NSURL
+      methods:
+        - resourceValuesForKeys:error:
+        - getResourceValue:forKey:error:
+    - class: NSFileManager
+      methods:
+        - attributesOfFileSystemForPath:error:
+  notes: |
+    Triggered by checking available / total disk space, typically via
+    `URLResourceKey.volumeAvailableCapacityKey` and similar. Reason codes:
+      85F4.1 — Display to the user
+      E174.1 — Decide whether to copy, write, or download
+      7D9E.1 — Inside-app debugging / metrics
+      B728.1 — Calculate disk space for the user's own files
+
+- category: NSPrivacyAccessedAPICategoryActiveKeyboards
+  valid_reasons: [3EC4.1, 54BD.1]
+  symbols: []
+  objc_methods:
+    - class: UITextInputMode
+      methods:
+        - activeInputModes
+  notes: |
+    Triggered by reading the list of active keyboards. Reason codes:
+      3EC4.1 — Custom keyboard apps providing UI to switch between keyboards
+      54BD.1 — Apps using ML-Kit-style language detection on first responder
+
+- category: NSPrivacyAccessedAPICategoryUserDefaults
+  valid_reasons: [CA92.1, 1C8F.1, C56D.1, AC6B.1]
+  symbols: []
+  objc_methods:
+    - class: NSUserDefaults
+      methods:
+        - standardUserDefaults
+        - initWithSuiteName:
+        - objectForKey:
+        - stringForKey:
+        - integerForKey:
+        - boolForKey:
+        - setObject:forKey:
+        - setBool:forKey:
+        - setInteger:forKey:
+  notes: |
+    Triggered by reading or writing `UserDefaults` / `NSUserDefaults`.
+    Reason codes:
+      CA92.1 — Inside-app information (no off-device transmission)
+      1C8F.1 — Display settings or user preferences inside the app
+      C56D.1 — App group functionality
+      AC6B.1 — Provide functionality that requires linking the user's
+               UserDefaults to an Apple Account
+    SDK-specific guidance: Sentinel Den SDKs do not currently touch
+    UserDefaults; this category appears here only for completeness.
