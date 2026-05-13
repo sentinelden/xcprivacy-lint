@@ -34,8 +34,16 @@ public final class CategoryResolver {
     private let entries: [APICategory: CategoryEntry]
 
     /// Load the embedded `symbols.yaml`.
-    public init(bundle: Bundle = .module) throws {
-        guard let url = bundle.url(forResource: "symbols", withExtension: "yaml") else {
+    ///
+    /// Pass `nil` (the default) to use the SwiftPM-generated resource
+    /// bundle for this module; pass an explicit `Bundle` from a host app
+    /// or test target when the default isn't reachable. Resolving
+    /// `Bundle.module` inside the body (rather than as a default argument
+    /// value) avoids the "static property 'module' is internal" build
+    /// error when CategoryResolver is exposed as `public`.
+    public init(bundle: Bundle? = nil) throws {
+        let resolvedBundle = bundle ?? .module
+        guard let url = resolvedBundle.url(forResource: "symbols", withExtension: "yaml") else {
             throw LinterError.malformedSymbolMap(
                 underlying: NSError(domain: "xcprivacy-lint", code: -1,
                                     userInfo: [NSLocalizedDescriptionKey: "symbols.yaml not found in bundle resources"])
