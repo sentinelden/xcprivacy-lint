@@ -69,29 +69,160 @@ public func resolveJobs(
         throw InputResolutionError.targetDoesNotExist(path: target)
     }
 
-    // Auto-detect by extension. TODO(v0.2): also detect by magic bytes for
-    // path-renamed inputs.
     let ext = (target as NSString).pathExtension.lowercased()
     switch ext {
     case "app":
         return [try resolveApp(at: target)]
     case "ipa":
-        // TODO(v0.2): unzip Payload/<App>.app into a temp dir, then resolveApp.
-        throw InputResolutionError.unrecognizedInputFormat(path: target)
+        return [try resolveIPA(at: target)]
     case "xcframework":
-        // TODO(v0.2): enumerate Info.plist's AvailableLibraries, return one
-        // job per slice.
-        throw InputResolutionError.unrecognizedInputFormat(path: target)
+        return try resolveXCFramework(at: target)
     case "xcarchive":
-        // TODO(v0.2): walk Products/Applications/<App>.app then resolveApp.
-        throw InputResolutionError.unrecognizedInputFormat(path: target)
+        return [try resolveXCArchive(at: target)]
     default:
-        // Bare binary? Try to use it directly if it's a regular file.
-        if !isDir.boolValue {
+        // Bare binary? Accept it if it is a regular file that actually starts
+        // with Mach-O magic — checking the bytes rather than trusting the
+        // extension, since build products are routinely renamed.
+        if !isDir.boolValue, isMachO(atPath: target) {
             return [BinaryAnalysisJob(binaryPath: target, manifestPath: manifest)]
         }
         throw InputResolutionError.unrecognizedInputFormat(path: target)
     }
+}
+
+// MARK: - Mach-O detection
+
+/// True when the file begins with a thin or fat Mach-O magic number.
+func isMachO(atPath path: String) -> Bool {
+    guard let handle = FileHandle(forReadingAtPath: path) else { return false }
+    defer { try? handle.close() }
+    guard let head = try? handle.read(upToCount: 4), head.count == 4 else { return false }
+    let be = UInt32(head[head.startIndex]) << 24 | UInt32(head[head.startIndex + 1]) << 16
+           | UInt32(head[head.startIndex + 2]) << 8 | UInt32(head[head.startIndex + 3])
+    switch be {
+    case 0xcafe_babe, 0xcafe_babf,          // fat, fat64
+         0xfeed_face, 0xfeed_facf,          // thin 32/64, big-endian order
+         0xcefa_edfe, 0xcffa_edfe:          // thin 32/64, byte-swapped
+        return true
+    default:
+        return false
+    }
+}
+
+// MARK: - .ipa
+
+/// An .ipa is a zip whose payload is `Payload/<App>.app`. Unpack to a
+/// temporary directory and hand off to the .app walker.
+///
+/// The extraction directory is deliberately not cleaned up during the run: the
+/// job holds paths into it, and the Linter reads them lazily. The OS reclaims
+/// NSTemporaryDirectory on its own schedule, which is the right owner for a
+/// short-lived CLI.
+private func resolveIPA(at path: String) throws -> BinaryAnalysisJob {
+    let destination = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("xcprivacy-lint-ipa-\(UUID().uuidString)")
+
+    do {
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        let unzip = Process()
+        unzip.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+        unzip.arguments = ["-q", "-o", path, "-d", destination.path]
+        unzip.standardOutput = Pipe()
+        unzip.standardError = Pipe()
+        try unzip.run()
+        unzip.waitUntilExit()
+        guard unzip.terminationStatus == 0 else {
+            throw InputResolutionError.ipaExtractionFailed(
+                underlying: NSError(domain: "unzip", code: Int(unzip.terminationStatus),
+                                    userInfo: [NSLocalizedDescriptionKey: "unzip exited \(unzip.terminationStatus)"])
+            )
+        }
+    } catch let error as InputResolutionError {
+        throw error
+    } catch {
+        throw InputResolutionError.ipaExtractionFailed(underlying: error)
+    }
+
+    let payload = destination.appendingPathComponent("Payload")
+    let apps = (try? FileManager.default.contentsOfDirectory(atPath: payload.path))?
+        .filter { $0.hasSuffix(".app") }
+        .sorted() ?? []
+    guard let app = apps.first else {
+        throw InputResolutionError.binaryNotFound(in: path)
+    }
+    return try resolveApp(at: payload.appendingPathComponent(app).path)
+}
+
+// MARK: - .xcarchive
+
+/// An .xcarchive holds the app at `Products/Applications/<App>.app`.
+private func resolveXCArchive(at path: String) throws -> BinaryAnalysisJob {
+    let applications = (path as NSString)
+        .appendingPathComponent("Products/Applications")
+    let apps = (try? FileManager.default.contentsOfDirectory(atPath: applications))?
+        .filter { $0.hasSuffix(".app") }
+        .sorted() ?? []
+    guard let app = apps.first else {
+        throw InputResolutionError.binaryNotFound(in: path)
+    }
+    return try resolveApp(at: (applications as NSString).appendingPathComponent(app))
+}
+
+// MARK: - .xcframework
+
+/// An .xcframework wraps one build per platform, listed in its Info.plist
+/// under `AvailableLibraries`. Each entry names a `LibraryIdentifier`
+/// subdirectory and a `LibraryPath` inside it.
+///
+/// Returns one job per slice: a framework can legitimately ship a different
+/// privacy manifest per platform, and a finding in the iOS slice must not be
+/// masked by a clean simulator slice.
+private func resolveXCFramework(at path: String) throws -> [BinaryAnalysisJob] {
+    let infoPath = (path as NSString).appendingPathComponent("Info.plist")
+    guard let data = try? Data(contentsOf: URL(fileURLWithPath: infoPath)),
+          let plist = (try? PropertyListSerialization.propertyList(from: data, format: nil)) as? [String: Any],
+          let libraries = plist["AvailableLibraries"] as? [[String: Any]],
+          !libraries.isEmpty
+    else {
+        throw InputResolutionError.unrecognizedInputFormat(path: path)
+    }
+
+    var jobs: [BinaryAnalysisJob] = []
+    for library in libraries {
+        guard let identifier = library["LibraryIdentifier"] as? String,
+              let libraryPath = library["LibraryPath"] as? String
+        else { continue }
+
+        let slice = (path as NSString)
+            .appendingPathComponent(identifier)
+        let product = (slice as NSString).appendingPathComponent(libraryPath)
+
+        // LibraryPath is either `Foo.framework` or a static `libFoo.a`.
+        if libraryPath.hasSuffix(".framework") {
+            let name = (libraryPath as NSString).deletingPathExtension
+            let binary = (product as NSString).appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: binary) else { continue }
+
+            // A framework's manifest sits at the bundle root on macOS-style
+            // layouts and under Resources/ on iOS-style ones. Check both.
+            let candidates = [
+                (product as NSString).appendingPathComponent("PrivacyInfo.xcprivacy"),
+                (product as NSString).appendingPathComponent("Resources/PrivacyInfo.xcprivacy")
+            ]
+            let manifest = candidates.first { FileManager.default.fileExists(atPath: $0) }
+            jobs.append(BinaryAnalysisJob(binaryPath: binary, manifestPath: manifest))
+        } else {
+            guard FileManager.default.fileExists(atPath: product) else { continue }
+            let manifest = (slice as NSString).appendingPathComponent("PrivacyInfo.xcprivacy")
+            jobs.append(BinaryAnalysisJob(
+                binaryPath: product,
+                manifestPath: FileManager.default.fileExists(atPath: manifest) ? manifest : nil
+            ))
+        }
+    }
+
+    guard !jobs.isEmpty else { throw InputResolutionError.binaryNotFound(in: path) }
+    return jobs
 }
 
 // MARK: - .app walking
@@ -110,10 +241,15 @@ private func resolveApp(at path: String) throws -> BinaryAnalysisJob {
     if let exeName, !exeName.isEmpty {
         binaryPath = (path as NSString).appendingPathComponent(exeName)
     } else {
-        // Fallback: assume single Mach-O file in the bundle root.
-        // TODO(v0.1): be smarter — walk and detect Mach-O magic bytes.
-        let fallback = (path as NSString).appendingPathComponent((path as NSString).lastPathComponent.replacingOccurrences(of: ".app", with: ""))
-        binaryPath = fallback
+        // No CFBundleExecutable (a malformed or hand-assembled bundle). Fall
+        // back to the first file in the bundle root that is actually a Mach-O
+        // image, rather than guessing from the bundle name.
+        let contents = (try? FileManager.default.contentsOfDirectory(atPath: path))?.sorted() ?? []
+        let found = contents
+            .map { (path as NSString).appendingPathComponent($0) }
+            .first { isMachO(atPath: $0) }
+        guard let found else { throw InputResolutionError.binaryNotFound(in: path) }
+        binaryPath = found
     }
 
     guard FileManager.default.fileExists(atPath: binaryPath) else {
