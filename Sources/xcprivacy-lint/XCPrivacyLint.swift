@@ -1,4 +1,7 @@
-// xcprivacy-lint — CLI entry point.
+// XCPrivacyLint.swift — CLI entry point.
+//
+// Deliberately not named main.swift: a file with that name is treated as
+// top-level code, which is incompatible with the @main attribute.
 //
 // Intentionally thin. All real work lives in `XCPrivacyLintCore`; this file's
 // job is argument parsing, input format detection, and report rendering.
@@ -14,12 +17,14 @@ import ArgumentParser
 import Foundation
 import XCPrivacyLintCore
 
+let toolVersion = "0.1.0"
+
 @main
 struct XCPrivacyLint: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "xcprivacy-lint",
         abstract: "Validate iOS PrivacyInfo.xcprivacy against the binary's actual API surface.",
-        version: "0.1.0-dev"
+        version: toolVersion
     )
 
     @Argument(help: "Path to .app, .ipa, .xcframework, or .xcarchive. Omit when using --manifest + --binary.")
@@ -31,8 +36,11 @@ struct XCPrivacyLint: ParsableCommand {
     @Option(help: "Override binary location (advanced; bypasses input format detection).")
     var binary: String?
 
-    @Option(help: "Output format: text | json | gh. Default: text.")
+    @Option(help: "Output format: text | json | gh | sarif. Default: text.")
     var format: OutputFormat = .text
+
+    @Option(help: "Write the report to this path instead of stdout.")
+    var output: String?
 
     @Flag(help: "Treat over-declared categories as hard findings (exit non-zero).")
     var strict: Bool = false
@@ -43,34 +51,88 @@ struct XCPrivacyLint: ParsableCommand {
     @Flag(help: "Show resolved symbol→category matches.")
     var verbose: Bool = false
 
+    @Flag(help: "Print every symbol and selector read from the binary, then exit. Use this to diagnose a suspected false negative: if an API you expect is absent here, the binary genuinely does not reference it.")
+    var dumpSymbols: Bool = false
+
     func run() throws {
-        // Resolve input → list of jobs.
+        // ── Resolve input → list of jobs ──────────────────────────────────
         let jobs: [BinaryAnalysisJob]
         do {
-            jobs = try resolveJobs(
-                target: target,
-                manifest: manifest,
-                binary: binary
-            )
+            jobs = try resolveJobs(target: target, manifest: manifest, binary: binary)
         } catch let error as InputResolutionError {
             FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
             throw ExitCode(64)
         }
 
-        // TODO(v0.1): wire up to XCPrivacyLintCore.Linter.run(job:).
-        // For now, scaffold-only — print resolved jobs and exit clean.
-        if !quiet {
-            print("xcprivacy-lint 0.1.0-dev · resolved \(jobs.count) job(s):")
+        // ── Symbol dump (diagnostic short-circuit) ────────────────────────
+        if dumpSymbols {
             for job in jobs {
-                print("  · binary:   \(job.binaryPath)")
-                print("    manifest: \(job.manifestPath ?? "<not detected>")")
+                let refs = try MachOReader(path: job.binaryPath).parse()
+                print("# \(job.binaryPath)")
+                print("# architectures: \(refs.architectures.joined(separator: ", "))")
+                print("# \(refs.importedSymbols.count) imported symbols, \(refs.objcSelectors.count) selectors")
+                for s in refs.importedSymbols.map(\.name).sorted() { print("symbol\t\(s)") }
+                for s in refs.objcSelectors.sorted() { print("selector\t\(s)") }
             }
-            print("\n(scaffolding — full lint not yet implemented; see DESIGN.md §9 roadmap)")
+            return
         }
 
-        // Until the linter is wired up, always exit clean. Once Linter.run
-        // returns findings, sum severities and exit per the contract above.
-        throw ExitCode(0)
+        // ── Lint each job ─────────────────────────────────────────────────
+        let linter = Linter()
+        var reports: [LintReport] = []
+        for job in jobs {
+            do {
+                reports.append(try linter.run(job: job, strict: strict))
+            } catch let error as LinterError {
+                FileHandle.standardError.write(Data("error: \(describe(error))\n".utf8))
+                throw ExitCode(65)
+            }
+        }
+
+        // ── Render ────────────────────────────────────────────────────────
+        var rendered: [String] = []
+        for report in reports {
+            switch format {
+            case .text:
+                rendered.append(Reporter.text(report, verbose: verbose, version: toolVersion))
+            case .json:
+                rendered.append(try Reporter.json(report))
+            case .gh:
+                rendered.append(Reporter.githubAnnotations(report))
+            case .sarif:
+                rendered.append(try Reporter.sarif(report, version: toolVersion))
+            }
+        }
+        let body = rendered.joined(separator: "\n")
+
+        if let output {
+            try body.write(toFile: output, atomically: true, encoding: .utf8)
+            if !quiet, format != .text {
+                print("wrote \(format.rawValue) report to \(output)")
+            }
+        } else if !(quiet && format == .text) {
+            print(body)
+        }
+
+        // ── Exit per contract ─────────────────────────────────────────────
+        // Across multiple jobs the worst outcome wins: one failing slice of an
+        // .xcframework has to fail the whole run, or CI would pass a build
+        // that App Store review will reject.
+        let worst = reports.map(\.exitCode).max() ?? 0
+        if worst != 0 { throw ExitCode(worst) }
+    }
+
+    private func describe(_ error: LinterError) -> String {
+        switch error {
+        case .binaryNotReadable(let path):
+            return "could not read binary at \(path)"
+        case .manifestNotReadable(let path):
+            return "could not parse privacy manifest at \(path)"
+        case .unsupportedMachOFormat:
+            return "input is not a Mach-O binary (or uses an unsupported format)"
+        case .malformedSymbolMap(let underlying):
+            return "bundled symbol map failed to load: \(underlying.localizedDescription)"
+        }
     }
 }
 
@@ -80,6 +142,7 @@ enum OutputFormat: String, ExpressibleByArgument {
     case text
     case json
     case gh
+    case sarif
 
     var defaultValueDescription: String { "text" }
 }
