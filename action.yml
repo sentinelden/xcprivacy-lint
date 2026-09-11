@@ -66,8 +66,12 @@ runs:
           exit 0
         fi
         echo "tap unavailable, building from source"
+        # if-blocks rather than `[ test ] && cmd`: composite steps run under
+        # `bash -e`, where a false test terminates the whole step.
         ref="${{ inputs.version }}"
-        [ -z "$ref" ] && ref="main"
+        if [ -z "$ref" ]; then
+          ref="main"
+        fi
         src="$RUNNER_TEMP/xcprivacy-lint-src"
         git clone --depth 1 --branch "$ref" https://github.com/sentinelden/xcprivacy-lint "$src"
         swift build -c release --package-path "$src"
@@ -78,7 +82,9 @@ runs:
       shell: bash
       run: |
         args=( "${{ inputs.target }}" --format "${{ inputs.format }}" --output "${{ inputs.output }}" )
-        [ "${{ inputs.strict }}" = "true" ] && args+=( --strict )
+        if [ "${{ inputs.strict }}" = "true" ]; then
+          args+=( --strict )
+        fi
 
         set +e
         xcprivacy-lint "${args[@]}"
