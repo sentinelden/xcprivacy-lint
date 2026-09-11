@@ -1,0 +1,118 @@
+name: xcprivacy-lint
+description: >-
+  Validate an iOS PrivacyInfo.xcprivacy manifest against the API surface the
+  binary actually references, and surface findings in the GitHub Security tab.
+author: Sentinel Den
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  target:
+    description: "Path to the .app, .ipa, .xcframework, or .xcarchive to check."
+    required: true
+  strict:
+    description: "Treat over-declared categories as hard findings."
+    required: false
+    default: "false"
+  format:
+    description: "Output format: sarif | gh | json | text. Default sarif."
+    required: false
+    default: "sarif"
+  output:
+    description: "Where to write the report. Defaults to xcprivacy-lint.sarif."
+    required: false
+    default: "xcprivacy-lint.sarif"
+  upload-sarif:
+    description: >-
+      Upload the SARIF report to GitHub code scanning. Requires the job to have
+      `security-events: write` permission. Ignored unless format is sarif.
+    required: false
+    default: "true"
+  fail-on-findings:
+    description: >-
+      Fail the step when the linter reports hard findings. Set to false to
+      report into the Security tab without blocking the build.
+    required: false
+    default: "true"
+  version:
+    description: "Git ref of xcprivacy-lint to build. Defaults to the action's own ref."
+    required: false
+    default: ""
+
+outputs:
+  report:
+    description: "Path to the generated report."
+    value: ${{ steps.lint.outputs.report }}
+  exit-code:
+    description: "Raw linter exit code: 0 clean, 1 warnings, 2 errors."
+    value: ${{ steps.lint.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    # Prefer the tap: a prebuilt bottle is seconds, a source build is minutes.
+    # Fall back to building from source so the action works on a runner with
+    # no Homebrew and on a fork that has not published a bottle yet.
+    - name: Install xcprivacy-lint
+      shell: bash
+      run: |
+        if command -v xcprivacy-lint >/dev/null 2>&1; then
+          echo "already on PATH: $(xcprivacy-lint --version)"
+          exit 0
+        fi
+        if command -v brew >/dev/null 2>&1 && brew install sentinelden/tap/xcprivacy-lint 2>/dev/null; then
+          echo "installed from tap"
+          exit 0
+        fi
+        echo "tap unavailable, building from source"
+        ref="${{ inputs.version }}"
+        [ -z "$ref" ] && ref="main"
+        src="$RUNNER_TEMP/xcprivacy-lint-src"
+        git clone --depth 1 --branch "$ref" https://github.com/sentinelden/xcprivacy-lint "$src"
+        swift build -c release --package-path "$src"
+        echo "$src/.build/release" >> "$GITHUB_PATH"
+
+    - name: Run xcprivacy-lint
+      id: lint
+      shell: bash
+      run: |
+        args=( "${{ inputs.target }}" --format "${{ inputs.format }}" --output "${{ inputs.output }}" )
+        [ "${{ inputs.strict }}" = "true" ] && args+=( --strict )
+
+        set +e
+        xcprivacy-lint "${args[@]}"
+        code=$?
+        set -e
+
+        echo "report=${{ inputs.output }}" >> "$GITHUB_OUTPUT"
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+        # 64 and 65 are usage and input errors — always fatal, since they mean
+        # the check did not actually run.
+        if [ "$code" -ge 64 ]; then
+          echo "::error::xcprivacy-lint could not run (exit $code)"
+          exit "$code"
+        fi
+
+        if [ "${{ inputs.fail-on-findings }}" = "true" ] && [ "$code" -ne 0 ]; then
+          echo "FAIL_LATER=$code" >> "$GITHUB_ENV"
+        fi
+
+    # Upload before failing, so findings reach the Security tab even on a
+    # blocking run. A step that fails first would skip this entirely.
+    - name: Upload SARIF
+      if: ${{ inputs.format == 'sarif' && inputs.upload-sarif == 'true' && hashFiles(inputs.output) != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.output }}
+        category: xcprivacy-lint
+
+    - name: Report result
+      shell: bash
+      run: |
+        if [ -n "${FAIL_LATER:-}" ]; then
+          echo "::error::xcprivacy-lint found privacy manifest problems (exit $FAIL_LATER)"
+          exit "$FAIL_LATER"
+        fi
+        echo "xcprivacy-lint passed"

@@ -26,9 +26,11 @@ Every iOS app since iOS 17 must ship a `PrivacyInfo.xcprivacy` manifest declarin
 
 ## Status
 
-**Pre-v0.1 scaffolding.** Design and skeleton are in place; see [`DESIGN.md`](./DESIGN.md). Contributions welcome.
+**v0.1 — working.** Parses thin and fat Mach-O (32- and 64-bit, both endiannesses), resolves `.app`, `.ipa`, `.xcframework` and `.xcarchive` inputs, and reports missing declarations, over-declarations and invalid reason codes. The symbol reader is verified against `nm` in the test suite.
 
-## Install (future state — not yet published)
+Category coverage is deliberately narrow — the five categories Apple publishes — and extending it is a one-file PR. See [Contributing](#contributing).
+
+## Install
 
 ```sh
 brew install sentinelden/tap/xcprivacy-lint
@@ -57,6 +59,12 @@ xcprivacy-lint --format json --strict MyApp.ipa
 
 # GitHub Actions annotations.
 xcprivacy-lint --format gh ./build/MyApp.app
+
+# SARIF for GitHub code scanning.
+xcprivacy-lint --format sarif --output results.sarif ./build/MyApp.app
+
+# Diagnose a suspected false negative: dump everything the reader saw.
+xcprivacy-lint --binary ./build/MyApp.app/MyApp --dump-symbols | grep statfs
 ```
 
 ### Exit codes
@@ -69,7 +77,7 @@ xcprivacy-lint --format gh ./build/MyApp.app
 | `64` | Usage / argument error |
 | `65` | Unparseable input |
 
-## What it checks
+## Findings
 
 For each of Apple's [required-reason API categories](https://developer.apple.com/documentation/bundleresources/privacy_manifest_files/describing_use_of_required_reason_api):
 
@@ -97,8 +105,31 @@ See [`DESIGN.md` §3](./DESIGN.md#3-non-goals) for the full non-goals list.
 
 ## CI integration
 
+### GitHub Action
+
 ```yaml
-# .github/workflows/ci.yml
+# .github/workflows/privacy.yml
+permissions:
+  contents: read
+  security-events: write     # required for the Security tab upload
+
+jobs:
+  privacy:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -scheme MyApp -derivedDataPath build
+      - uses: sentinelden/xcprivacy-lint@v0.1.0
+        with:
+          target: build/Build/Products/Debug-iphoneos/MyApp.app
+          strict: true
+```
+
+Findings land in the repository's **Security → Code scanning** tab, deduplicated across runs and tracked as they open and close. Set `fail-on-findings: false` to report without blocking the build while you work through a backlog.
+
+### Without the Action
+
+```yaml
 - name: Validate PrivacyInfo.xcprivacy
   run: |
     brew install sentinelden/tap/xcprivacy-lint
@@ -128,7 +159,7 @@ target (.app / .ipa / .xcframework / .xcarchive)
                           required-category set ┘
                                    │
                                    ▼
-                            [Reporter: text | json | gh-actions]
+                   [Reporter: text | json | gh-actions | sarif]
 ```
 
 Three independently-testable layers: input extraction, static analysis core (`XCPrivacyLintCore` library), and report rendering.
@@ -138,8 +169,8 @@ Three independently-testable layers: input extraction, static analysis core (`XC
 PRs welcome. The most valuable contributions today are:
 
 1. **Symbol coverage** — adding entries to `Resources/symbols.yaml` for categories or symbols we missed. Each addition should reference Apple's docs and include a test asserting a known binary triggers the lookup.
-2. **Input format support** — `.xcarchive` walking, `.xcframework` per-slice handling.
-3. **Output formats** — SARIF for IDE integrations, plain markdown for PR-comment bots.
+2. **Objective-C precision** — selectors are currently matched without their receiving class, because recovering the receiver means walking `__objc_selrefs` back through class metadata. Distinctive selectors make this sound in practice, but a binary that defines its own `-systemUptime` would produce a false positive. A correct receiver walk would close that gap.
+3. **Output formats** — plain markdown for PR-comment bots; a Danger plugin.
 
 Run the test suite:
 
