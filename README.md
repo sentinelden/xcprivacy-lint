@@ -26,7 +26,7 @@ Every iOS app since iOS 17 must ship a `PrivacyInfo.xcprivacy` manifest declarin
 
 ## Status
 
-**v0.1 — working.** Parses thin and fat Mach-O (32- and 64-bit, both endiannesses), resolves `.app`, `.ipa`, `.xcframework` and `.xcarchive` inputs, and reports missing declarations, over-declarations and invalid reason codes. The symbol reader is verified against `nm` in the test suite.
+**v0.2 — working.** Parses thin and fat Mach-O (32- and 64-bit, both endiannesses), resolves `.app`, `.ipa`, `.xcframework` and `.xcarchive` inputs, and reports missing declarations, over-declarations and invalid reason codes. The symbol reader is verified against `nm` in the test suite.
 
 Category coverage is deliberately narrow — the five categories Apple publishes — and extending it is a one-file PR. See [Contributing](#contributing).
 
@@ -119,7 +119,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: xcodebuild -scheme MyApp -derivedDataPath build
-      - uses: sentinelden/xcprivacy-lint@v0.1.0
+      - uses: sentinelden/xcprivacy-lint@v0.2.0
         with:
           target: build/Build/Products/Debug-iphoneos/MyApp.app
           strict: true
