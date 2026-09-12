@@ -1,9 +1,15 @@
 # symbols.yaml: symbol → required-reason API category mapping.
 #
 # Update this file when Apple announces a new required-reason category or new
-# symbols within an existing one. Source of truth:
+# symbols within an existing one. Source of truth for both the symbol lists and
+# every reason code below:
 #
-#   https://developer.apple.com/documentation/bundleresources/privacy_manifest_files/describing_use_of_required_reason_api
+#   https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype
+#
+# Reason codes are not decoration. `valid_reasons` is what the linter offers in
+# missing-declaration findings AND what it validates declared reasons against,
+# so a wrong code here means the tool accepts a manifest App Store Connect will
+# reject. Copy codes from Apple's page verbatim; do not paraphrase from memory.
 #
 # Schema (loaded by CategoryResolver):
 #
@@ -26,12 +32,18 @@
 # below is the safest: it preserves the colons literally and survives the
 # YAMLDecoder round-trip into `methods: [String]`.
 #
-# v0.1 ships with the five categories Apple currently publishes. Coverage is
-# intentionally narrow at this point. PRs adding symbols welcome, with each
-# new symbol citing the Apple-docs URL that supports the mapping.
+# KNOWN LIMITATION: `symbolIndex` maps one symbol to exactly one category, but
+# Apple lists getattrlist, fgetattrlist and getattrlistat under BOTH
+# FileTimestamp and DiskSpace. Each is therefore assigned to a single category
+# here and may be attributed to the wrong one. Fixing this needs a
+# symbol -> [category] index, not a data change.
+#
+# Ships with the five categories Apple currently publishes. Coverage is
+# intentionally narrow. PRs adding symbols welcome, with each new symbol citing
+# the Apple-docs URL that supports the mapping.
 
 - category: NSPrivacyAccessedAPICategoryFileTimestamp
-  valid_reasons: [0A2A.1, 3B52.1, 8FFB.1, C617.1, DDA9.1]
+  valid_reasons: [DDA9.1, C617.1, 3B52.1, 0A2A.1]
   symbols:
     - getattrlist
     - getattrlistbulk
@@ -50,18 +62,20 @@
         - "getResourceValue:forKey:error:"
         - "resourceValuesForKeys:error:"
   notes: |
-    Triggered by file-timestamp reads via FileManager APIs or lower-level
-    POSIX calls. Reason codes:
-      0A2A.1, Display file timestamps to the user
-      3B52.1, Inside-app functionality needing file timestamps (e.g.,
-               jailbreak filesystem checks targeting paths outside the
-               app's container)
-      8FFB.1, Inside-app optimization (caching by timestamp)
-      C617.1, Files inside the app container, app group, or temp dir
-               (most common case for in-app persistence)
-      DDA9.1, Apple Music API
-    SDK-specific guidance: SentinelSDK uses 3B52.1 (out-of-container jailbreak
-    checks); EnclaveVault + AgenticGuard use C617.1 (in-container writes).
+    Triggered by file-timestamp reads via FileManager APIs, the
+    contentModificationDateKey / creationDateKey URL resource keys, or the
+    lower-level POSIX stat and getattrlist families. Reason codes:
+      DDA9.1, Display file timestamps to the person using the device.
+               Information accessed for this reason may not be sent off-device.
+      C617.1, Access timestamps, size or other metadata of files inside the
+               app container, app group container, or the app's CloudKit
+               container. The most common case for in-app persistence.
+      3B52.1, Access timestamps, size or other metadata of files or
+               directories the user specifically granted access to, such as
+               through a document picker.
+      0A2A.1, THIRD-PARTY SDKs ONLY. Declare only if your SDK wraps a file
+               timestamp API for the host app to call. An app target must not
+               declare this code.
 
 - category: NSPrivacyAccessedAPICategorySystemBootTime
   valid_reasons: [35F9.1, 8FFB.1, 3D61.1]
@@ -75,14 +89,18 @@
   notes: |
     Triggered by reading system boot time / uptime, typically via
     `ProcessInfo.systemUptime` (Swift) or `mach_absolute_time()` (C).
-    Reason codes:
-      35F9.1, Time elapsed within the app, never sent off-device (the
-               correct code for uptime-anchored license clocks)
-      8FFB.1, Inside-app optimization
-      3D61.1, Absolute timestamps for in-app events that may leave the device
-    SDK-specific guidance: all four Sentinel Den SDKs use 35F9.1, their
-    uptime reads are consumed locally for license clock validation and never
-    transmitted.
+    Note that `mach_continuous_time` is not named on Apple's list; it is
+    included here because it derives from the same clock, so it may produce a
+    finding Apple would not require. Reason codes:
+      35F9.1, Measure time elapsed between events within the app, or perform
+               calculations to enable timers. Elapsed-time information may be
+               sent off-device; the boot time itself may not.
+      8FFB.1, Calculate absolute timestamps for events within your app, such
+               as UIKit or AVFAudio events. Those timestamps may be sent
+               off-device; boot time and anything else derived from it may not.
+      3D61.1, Include boot time in an optional bug report the user chooses to
+               submit, with the information prominently displayed as part of
+               the report.
 
 - category: NSPrivacyAccessedAPICategoryDiskSpace
   valid_reasons: [85F4.1, E174.1, 7D9E.1, B728.1]
@@ -101,12 +119,22 @@
       methods:
         - "attributesOfFileSystemForPath:error:"
   notes: |
-    Triggered by checking available / total disk space, typically via
-    `URLResourceKey.volumeAvailableCapacityKey` and similar. Reason codes:
-      85F4.1, Display to the user
-      E174.1, Decide whether to copy, write, or download
-      7D9E.1, Inside-app debugging / metrics
-      B728.1, Calculate disk space for the user's own files
+    Triggered by checking available or total disk space, typically via the
+    volumeAvailableCapacityKey, volumeAvailableCapacityForImportantUsageKey,
+    volumeAvailableCapacityForOpportunisticUsageKey or volumeTotalCapacityKey
+    URL resource keys, or the statfs family. Reason codes:
+      85F4.1, Display disk space information to the person using the device.
+               May not be sent off-device, with a narrow local-network
+               exception for displaying it on the same person's other device.
+      E174.1, Check whether there is enough space to write files, or whether
+               space is low so the app can delete files. The app must behave
+               differently based on disk space in a way users can observe.
+      7D9E.1, Include disk space in an optional bug report the user chooses to
+               submit, with the information prominently displayed as part of
+               the report.
+      B728.1, HEALTH RESEARCH APPS ONLY. Declare only to inform research
+               participants that low disk space is affecting data collection,
+               subject to App Store Review Guideline 5.1.3.
 
 - category: NSPrivacyAccessedAPICategoryActiveKeyboards
   valid_reasons: [3EC4.1, 54BD.1]
@@ -117,8 +145,12 @@
         - "activeInputModes"
   notes: |
     Triggered by reading the list of active keyboards. Reason codes:
-      3EC4.1, Custom keyboard apps providing UI to switch between keyboards
-      54BD.1, Apps using ML-Kit-style language detection on first responder
+      3EC4.1, CUSTOM KEYBOARD APPS ONLY. Providing a systemwide custom
+               keyboard must be the app's primary functionality.
+      54BD.1, Present the correct customized interface to the person using the
+               device. The app must have text fields for entering or editing
+               text and must behave differently based on active keyboards in a
+               way users can observe.
 
 - category: NSPrivacyAccessedAPICategoryUserDefaults
   valid_reasons: [CA92.1, 1C8F.1, C56D.1, AC6B.1]
@@ -138,10 +170,13 @@
   notes: |
     Triggered by reading or writing `UserDefaults` / `NSUserDefaults`.
     Reason codes:
-      CA92.1, Inside-app information (no off-device transmission)
-      1C8F.1, Display settings or user preferences inside the app
-      C56D.1, App group functionality
-      AC6B.1, Provide functionality that requires linking the user's
-               UserDefaults to an Apple Account
-    SDK-specific guidance: Sentinel Den SDKs do not currently touch
-    UserDefaults; this category appears here only for completeness.
+      CA92.1, Read and write information accessible only to the app itself.
+               The usual choice for an app storing its own preferences.
+      1C8F.1, Read and write information accessible only to the apps, app
+               extensions and App Clips in the same App Group.
+      C56D.1, THIRD-PARTY SDKs ONLY. Declare only if your SDK wraps a user
+               defaults API for the host app to call. An app target must not
+               declare this code.
+      AC6B.1, Read the com.apple.configuration.managed key for MDM app
+               configuration, or write com.apple.feedback.managed for MDM
+               feedback.
