@@ -1,4 +1,4 @@
-// CategoryResolver.swift — load the symbol→category map at startup and
+// CategoryResolver.swift: load the symbol→category map at startup and
 // answer "which required-reason category, if any, does this symbol trigger?"
 //
 // The map ships as Resources/symbols.yaml (embedded into the binary at build
@@ -34,7 +34,7 @@ public final class CategoryResolver {
     /// Reverse index: selector -> (owning class, category).
     ///
     /// The Mach-O __objc_methname section gives us selectors without the
-    /// class they are sent to — recovering the receiver would mean walking
+    /// class they are sent to, recovering the receiver would mean walking
     /// __objc_selrefs back through the class metadata, which is not
     /// reliable across optimisation levels. Apple's required-reason
     /// selectors are distinctive enough (`systemUptime`,
@@ -114,7 +114,7 @@ public final class CategoryResolver {
         entries[category]?.validReasons ?? []
     }
 
-    /// All categories known to the resolver — useful for sanity-checking
+    /// All categories known to the resolver, useful for sanity-checking
     /// the bundled symbols.yaml against Apple's published list.
     public var knownCategories: Set<APICategory> {
         Set(entries.keys)

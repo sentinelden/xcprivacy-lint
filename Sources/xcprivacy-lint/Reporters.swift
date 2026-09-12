@@ -1,10 +1,10 @@
-// Reporters.swift — render a LintReport in each output format.
+// Reporters.swift: render a LintReport in each output format.
 //
 // Four formats, three audiences:
 //   .text   humans at a terminal
 //   .json   scripts and downstream tooling
-//   .gh     GitHub Actions workflow commands — inline annotations on the diff
-//   .sarif  GitHub code scanning — findings in the Security tab, with history
+//   .gh     GitHub Actions workflow commands, inline annotations on the diff
+//   .sarif  GitHub code scanning, findings in the Security tab, with history
 //
 // SARIF is the one that matters for adoption. Workflow annotations vanish when
 // the run is deleted; SARIF results persist, get deduplicated across runs, and

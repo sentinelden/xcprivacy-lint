@@ -1,4 +1,4 @@
-// MachOReaderTests.swift — the reader is the foundation of every finding, so
+// MachOReaderTests.swift: the reader is the foundation of every finding, so
 // these tests pin its behaviour against a real compiled binary and against
 // `nm`, which is the ground truth users will compare us to.
 
@@ -22,7 +22,7 @@ final class MachOReaderTests: XCTestCase {
     }
 
     /// Mach-O prefixes every C symbol with one underscore. We strip exactly
-    /// that one — never more. `___stack_chk_fail` on disk is the source-level
+    /// that one, never more. `___stack_chk_fail` on disk is the source-level
     /// `__stack_chk_fail`, a reserved-namespace symbol that really does begin
     /// with two underscores; stripping greedily would corrupt it.
     func testStripsExactlyOneLeadingUnderscore() throws {

@@ -1,16 +1,16 @@
 // swift-tools-version: 5.9
 //
-// xcprivacy-lint — validate iOS privacy manifests against binary API surfaces.
+// xcprivacy-lint: validate iOS privacy manifests against binary API surfaces.
 // See DESIGN.md for the architecture and roadmap.
 //
 // Two targets:
-//   1. `XCPrivacyLintCore` — the static-analysis library. Importable into other
+//   1. `XCPrivacyLintCore`: the static-analysis library. Importable into other
 //      tools (e.g., an Xcode build-phase script that wants programmatic access
 //      to findings).
-//   2. `xcprivacy-lint` — the CLI executable. Wraps the core in argument
+//   2. `xcprivacy-lint`: the CLI executable. Wraps the core in argument
 //      parsing, input format detection, and report rendering.
 //
-// Plus a test target for the core. The CLI is intentionally thin — almost all
+// Plus a test target for the core. The CLI is intentionally thin, almost all
 // behavior lives in the core, which is what we test.
 
 import PackageDescription

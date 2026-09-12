@@ -1,4 +1,4 @@
-# xcprivacy-lint — design doc
+# xcprivacy-lint: design doc
 
 **Status:** draft / scaffolding · **Owner:** Muhammad Khan · **Last updated:** 2026-05-10
 
@@ -91,13 +91,13 @@ Output: `[BinaryAnalysisJob]`, each with a binary path and a (possibly missing) 
 
 The reusable library that does the actual work. Three modules:
 
-**`MachOReader`** — parses Mach-O binaries (fat or thin), walks load commands, extracts:
+**`MachOReader`**: parses Mach-O binaries (fat or thin), walks load commands, extracts:
 - `LC_SYMTAB` symbol names (C / Swift mangled)
 - `LC_DYLD_INFO_ONLY` lazy bindings (external symbols resolved at runtime)
 - Objective-C class and method references via `__objc_classlist`, `__objc_classname`, `__objc_methname` sections
-- Swift symbols via the mangled-name prefix `_$s` and demangling (via the `swift-demangle` binary if present, falling back to raw mangled names if not — both work for category lookup)
+- Swift symbols via the mangled-name prefix `_$s` and demangling (via the `swift-demangle` binary if present, falling back to raw mangled names if not, both work for category lookup)
 
-**`PrivacyManifestReader`** — parses `PrivacyInfo.xcprivacy` via `PropertyListDecoder`. Strongly-typed model:
+**`PrivacyManifestReader`**: parses `PrivacyInfo.xcprivacy` via `PropertyListDecoder`. Strongly-typed model:
 
 ```swift
 public struct PrivacyManifest: Decodable {
@@ -113,7 +113,7 @@ public struct AccessedAPI: Decodable {
 }
 ```
 
-**`CategoryResolver`** — the soul of the tool. Reads `Resources/symbols.yaml` (the symbol→category map; see §6 below) and provides:
+**`CategoryResolver`**: the soul of the tool. Reads `Resources/symbols.yaml` (the symbol→category map; see §6 below) and provides:
 
 ```swift
 public func category(forSymbol symbol: String) -> APICategory?
@@ -127,16 +127,16 @@ The map is loaded once per run and queried per-symbol.
 
 Takes the diff result and emits findings in one of three formats:
 
-- **`text` (default)** — coloured human-readable output, grouped by severity
-- **`json`** — schema-stable JSON for CI tooling
-- **`github-actions`** — `::warning file=...,line=...::msg` annotations consumed by GitHub Actions UI
+- **`text` (default)**: coloured human-readable output, grouped by severity
+- **`json`**: schema-stable JSON for CI tooling
+- **`github-actions`**: `::warning file=...,line=...::msg` annotations consumed by GitHub Actions UI
 
 Exit codes:
-- `0` — clean run, no findings
-- `1` — soft findings only (over-declared categories, unused reasons)
-- `2` — hard findings (missing required-reason declarations — would fail Apple review)
-- `64` — usage / input error
-- `65` — unparseable input (corrupt binary, malformed manifest)
+- `0`: clean run, no findings
+- `1`: soft findings only (over-declared categories, unused reasons)
+- `2` (hard findings (missing required-reason declarations) would fail Apple review)
+- `64`: usage / input error
+- `65`: unparseable input (corrupt binary, malformed manifest)
 
 ## 6. Symbol → category mapping
 
@@ -163,11 +163,11 @@ Each entry has the form:
   notes: |
     Touched whenever code reads file timestamps via FileManager APIs
     or the lower-level POSIX calls. Reason codes:
-      0A2A.1 — Display file timestamps to the user
-      3B52.1 — Inside-app functionality requiring file timestamps
-      8FFB.1 — Inside-app optimization
-      C617.1 — Files inside the app container, app group, or temp dir
-      DDA9.1 — Apple Music API
+      0A2A.1, Display file timestamps to the user
+      3B52.1, Inside-app functionality requiring file timestamps
+      8FFB.1, Inside-app optimization
+      C617.1, Files inside the app container, app group, or temp dir
+      DDA9.1, Apple Music API
 ```
 
 ### 6.1 Bootstrap content
@@ -241,11 +241,11 @@ Manifest: Payload/MyApp.app/PrivacyInfo.xcprivacy
          Declared in manifest but no UserDefaults symbol references found.
          Either remove the declaration or check this is intended.
 
-[ OK ]   NSPrivacyAccessedAPICategorySystemBootTime — declared with reason 35F9.1.
+[ OK ]   NSPrivacyAccessedAPICategorySystemBootTime, declared with reason 35F9.1.
          3 call sites resolved (ProcessInfo.systemUptime).
 
 Findings: 1 error, 1 warning, 1 ok.
-Exit code: 2 (hard findings — would fail App Store review).
+Exit code: 2 (hard findings, would fail App Store review).
 ```
 
 ### JSON mode
@@ -310,7 +310,7 @@ Exit code: 2 (hard findings — would fail App Store review).
 
 - **How to handle private frameworks linked against in production?** Apple's required-reason list applies only to public-API category APIs. A private API that calls `getattrlist` internally probably isn't surfaced in the parent app's symbols. Worth surveying.
 - **Demangling Swift symbols robustly.** Embedding `libswiftDemangle` ties us to a specific Swift runtime. Shelling out to `xcrun swift demangle` is simpler but adds a launch-time dependency. v0.1: raw matching; v0.3: revisit.
-- **Multiple architectures in a fat binary.** Should xcprivacy-lint validate each slice independently or union their symbol sets? Probably the latter — the manifest applies to the whole bundle.
+- **Multiple architectures in a fat binary.** Should xcprivacy-lint validate each slice independently or union their symbol sets? Probably the latter, the manifest applies to the whole bundle.
 - **xcframework slice metadata.** When validating an xcframework slice, the manifest lives at the framework root, not per-slice. Need to confirm Apple's expectation.
 
 ## 11. Non-functional requirements

@@ -1,4 +1,4 @@
-// PrivacyManifestReader.swift — parse PrivacyInfo.xcprivacy via Foundation's
+// PrivacyManifestReader.swift: parse PrivacyInfo.xcprivacy via Foundation's
 // PropertyListDecoder into a strongly-typed model.
 //
 // The plist is intentionally simple; we lean on PropertyListDecoder's schema

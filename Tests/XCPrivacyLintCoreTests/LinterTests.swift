@@ -1,4 +1,4 @@
-// LinterTests.swift — end-to-end behaviour: a real binary plus a manifest in,
+// LinterTests.swift: end-to-end behaviour: a real binary plus a manifest in,
 // findings out. These are the tests that would catch a regression a user
 // would actually notice.
 

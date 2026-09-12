@@ -1,4 +1,4 @@
-// Fixture.swift — build a real .app bundle at test time.
+// Fixture.swift: build a real .app bundle at test time.
 //
 // Binary-analysis tests need a real Mach-O to be worth anything, and checking
 // compiled binaries into the repo makes them unauditable and stale. So we

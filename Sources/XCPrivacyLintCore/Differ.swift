@@ -1,16 +1,16 @@
-// Differ.swift — compare what the binary needs against what the manifest
+// Differ.swift: compare what the binary needs against what the manifest
 // declares, and turn the difference into Findings.
 //
 // Four outcomes per category:
 //
-//   needed & !declared  -> .missingDeclaration  (error — App Store will reject)
-//   !needed & declared  -> .overDeclared        (warning — harmless but sloppy,
+//   needed & !declared  -> .missingDeclaration  (error, App Store will reject)
+//   !needed & declared  -> .overDeclared        (warning, harmless but sloppy,
 //                                                and Apple has begun querying
 //                                                declarations with no matching
 //                                                API use)
 //   declared with a reason code not valid for that category
 //                       -> .invalidReasonCode   (error)
-//   needed & declared   -> .successfulMatch     (info — shown under --verbose)
+//   needed & declared   -> .successfulMatch     (info, shown under --verbose)
 //
 // The asymmetry in severity is deliberate. A missing declaration is a hard
 // rejection with a multi-day turnaround. An over-declaration costs nothing at
@@ -186,7 +186,7 @@ public enum Differ {
                     trigger: triggers.first?.trigger,
                     suggestedReasons: declaredReasons,
                     message: """
-                        \(type) — declared with reason\(declaredReasons.count == 1 ? "" : "s") \
+                        \(type), declared with reason\(declaredReasons.count == 1 ? "" : "s") \
                         \(declaredReasons.joined(separator: ", ")); \
                         matched \(triggers.count) reference\(triggers.count == 1 ? "" : "s") in the binary.
                         """

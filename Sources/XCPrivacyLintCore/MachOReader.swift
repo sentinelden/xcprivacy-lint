@@ -1,4 +1,4 @@
-// MachOReader.swift — parse a Mach-O binary and emit the symbol references
+// MachOReader.swift: parse a Mach-O binary and emit the symbol references
 // that matter for required-reason API detection.
 //
 // Supports thin Mach-O and fat (multi-arch) Mach-O, 32- and 64-bit, in both
@@ -7,12 +7,12 @@
 //
 // Two classes of reference we care about:
 //
-//   1. Imported symbols — the undefined external entries in LC_SYMTAB. These
+//   1. Imported symbols, the undefined external entries in LC_SYMTAB. These
 //      are exactly the functions the binary calls but does not define, which
 //      is the definition of "uses this API": `getattrlist`, `statfs`,
 //      `mach_absolute_time`, and the mangled Swift thunks that wrap them.
 //
-//   2. Objective-C selector references — the C strings in the __objc_methname
+//   2. Objective-C selector references, the C strings in the __objc_methname
 //      section, which the runtime uses to build selector tables. Any selector
 //      the binary sends appears here.
 //
@@ -23,8 +23,8 @@
 // chained fixups of LC_DYLD_CHAINED_FIXUPS). The symbol table is present and
 // stable in every one of those eras, including binaries built with chained
 // fixups where the classic bind table is absent entirely. We trade a small
-// amount of precision — the symbol table does not tell us *where* a symbol is
-// referenced from — for correctness across the whole range of inputs people
+// amount of precision, the symbol table does not tell us *where* a symbol is
+// referenced from, for correctness across the whole range of inputs people
 // will actually feed us.
 //
 // See DESIGN.md §5.2.
@@ -47,7 +47,7 @@ public struct ImportedSymbol: Sendable, Hashable {
 }
 
 public struct MachOSymbolReferences: Sendable {
-    /// Undefined external symbols — the binary's dynamic import surface.
+    /// Undefined external symbols, the binary's dynamic import surface.
     public let importedSymbols: Set<ImportedSymbol>
     /// Objective-C selectors referenced anywhere in the binary.
     public let objcSelectors: Set<String>
@@ -214,7 +214,7 @@ public struct MachOReader {
     ///
     /// `symtab_command` is { cmd, cmdsize, symoff, nsyms, stroff, strsize },
     /// where symoff/stroff are offsets from the start of the *slice*, not the
-    /// file — which matters for fat binaries.
+    /// file: which matters for fat binaries.
     private static func parseSymbolTable(_ data: Data,
                                          command: Int,
                                          sliceOffset: Int,
@@ -243,7 +243,7 @@ public struct MachOReader {
             // Skip debug symbols (N_STAB); they describe source, not linkage.
             guard type & 0xe0 == 0 else { continue }
             // Undefined (N_UNDF, type bits == 0) and external (N_EXT) means
-            // "this binary calls it but does not define it" — an import.
+            // "this binary calls it but does not define it", an import.
             guard type & 0x0e == 0x00, type & 0x01 != 0 else { continue }
             guard strx > 0, strOff + strx < strOff + strSize else { continue }
 
@@ -326,8 +326,8 @@ public struct MachOReader {
 // MARK: - Bounds-checked byte access
 //
 // Every read below is explicitly bounds-checked against the buffer. A privacy
-// linter routinely gets pointed at binaries from untrusted sources — a build
-// artifact from a vendor SDK, an .ipa pulled off a device — and a malformed
+// linter routinely gets pointed at binaries from untrusted sources, a build
+// artifact from a vendor SDK, an .ipa pulled off a device, and a malformed
 // header must produce an error, never an out-of-bounds read.
 
 private extension Data {

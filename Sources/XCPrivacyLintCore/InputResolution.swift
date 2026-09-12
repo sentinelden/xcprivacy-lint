@@ -1,4 +1,4 @@
-// InputResolution.swift — turn a CLI input (.app / .ipa / .xcframework /
+// InputResolution.swift: turn a CLI input (.app / .ipa / .xcframework /
 // .xcarchive, or explicit --binary + --manifest paths) into one or more
 // `BinaryAnalysisJob` instances the Linter can consume.
 //
@@ -26,7 +26,7 @@ public enum InputResolutionError: Error, LocalizedError {
         case .binaryNotFound(let p):
             return "could not locate the executable binary inside \(p)"
         case .manifestNotFound(let p):
-            return "PrivacyInfo.xcprivacy not found inside \(p) — declare or pass --manifest"
+            return "PrivacyInfo.xcprivacy not found inside \(p), declare or pass --manifest"
         case .ipaExtractionFailed(let e):
             return "failed to unpack .ipa: \(e.localizedDescription)"
         }
@@ -81,7 +81,7 @@ public func resolveJobs(
         return [try resolveXCArchive(at: target)]
     default:
         // Bare binary? Accept it if it is a regular file that actually starts
-        // with Mach-O magic — checking the bytes rather than trusting the
+        // with Mach-O magic, checking the bytes rather than trusting the
         // extension, since build products are routinely renamed.
         if !isDir.boolValue, isMachO(atPath: target) {
             return [BinaryAnalysisJob(binaryPath: target, manifestPath: manifest)]
