@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel a run when a newer commit supersedes it. Without this, pushing twice
+# in quick succession leaves the first build running to completion for nothing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: macos-14

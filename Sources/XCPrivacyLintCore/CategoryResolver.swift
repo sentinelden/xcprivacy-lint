@@ -1,4 +1,4 @@
-// CategoryResolver.swift — load the symbol→category map at startup and
+// CategoryResolver.swift: load the symbol→category map at startup and
 // answer "which required-reason category, if any, does this symbol trigger?"
 //
 // The map ships as Resources/symbols.yaml (embedded into the binary at build
@@ -31,6 +31,17 @@ public struct ResolvedCategory: Sendable, Hashable {
 public final class CategoryResolver {
     private let symbolIndex: [String: APICategory]
     private let objcIndex: [String: [String: APICategory]]   // [class][method] = category
+    /// Reverse index: selector -> (owning class, category).
+    ///
+    /// The Mach-O __objc_methname section gives us selectors without the
+    /// class they are sent to, recovering the receiver would mean walking
+    /// __objc_selrefs back through the class metadata, which is not
+    /// reliable across optimisation levels. Apple's required-reason
+    /// selectors are distinctive enough (`systemUptime`,
+    /// `attributesOfItemAtPath:error:`) that selector-only matching is
+    /// sound in practice. Where it is not, the finding is reported at
+    /// lower confidence rather than suppressed.
+    private let selectorIndex: [String: (className: String, category: APICategory)]
     private let entries: [APICategory: CategoryEntry]
 
     /// Load the embedded `symbols.yaml`.
@@ -54,6 +65,7 @@ public final class CategoryResolver {
 
         var symbolIndex: [String: APICategory] = [:]
         var objcIndex: [String: [String: APICategory]] = [:]
+        var selectorIndex: [String: (className: String, category: APICategory)] = [:]
         var entries: [APICategory: CategoryEntry] = [:]
         for raw in parsed {
             let cat = APICategory(raw.category)
@@ -69,12 +81,14 @@ public final class CategoryResolver {
                 var perClass = objcIndex[objc.class, default: [:]]
                 for m in objc.methods {
                     perClass[m] = cat
+                    selectorIndex[m] = (className: objc.class, category: cat)
                 }
                 objcIndex[objc.class] = perClass
             }
         }
         self.symbolIndex = symbolIndex
         self.objcIndex = objcIndex
+        self.selectorIndex = selectorIndex
         self.entries = entries
     }
 
@@ -88,13 +102,19 @@ public final class CategoryResolver {
         objcIndex[className]?[method]
     }
 
+    /// Look up by bare Objective-C selector, recovering the class from the
+    /// reverse index. See `selectorIndex` for why this is selector-only.
+    public func category(forSelector selector: String) -> (className: String, category: APICategory)? {
+        selectorIndex[selector]
+    }
+
     /// Valid reason codes for a category, used when emitting "missing
     /// declaration; suggest reason X or Y" messages.
     public func validReasons(for category: APICategory) -> Set<String> {
         entries[category]?.validReasons ?? []
     }
 
-    /// All categories known to the resolver — useful for sanity-checking
+    /// All categories known to the resolver, useful for sanity-checking
     /// the bundled symbols.yaml against Apple's published list.
     public var knownCategories: Set<APICategory> {
         Set(entries.keys)
