@@ -138,7 +138,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: xcodebuild -scheme MyApp -derivedDataPath build
-      - uses: sentinelden/xcprivacy-lint@v0.2.0
+      - uses: sentinelden/xcprivacy-lint@v0.3.0
         with:
           target: build/Build/Products/Debug-iphoneos/MyApp.app
           strict: true
