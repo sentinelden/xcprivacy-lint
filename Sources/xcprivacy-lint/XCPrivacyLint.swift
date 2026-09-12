@@ -1,4 +1,4 @@
-// XCPrivacyLint.swift — CLI entry point.
+// XCPrivacyLint.swift: CLI entry point.
 //
 // Deliberately not named main.swift: a file with that name is treated as
 // top-level code, which is incompatible with the @main attribute.
@@ -9,7 +9,7 @@
 // Exit code contract (see DESIGN.md §5.3):
 //   0   clean run, no findings
 //   1   soft findings only (over-declared categories)
-//   2   hard findings — would fail App Store review
+//   2   hard findings, would fail App Store review
 //   64  usage / argument error  (matches sysexits.h EX_USAGE)
 //   65  unparseable input         (sysexits.h EX_DATAERR)
 

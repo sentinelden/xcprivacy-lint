@@ -1,4 +1,4 @@
-// CategoryResolverTests.swift — sanity tests for the bundled symbols.yaml.
+// CategoryResolverTests.swift: sanity tests for the bundled symbols.yaml.
 //
 // The fixture under test is Resources/symbols.yaml (loaded via Bundle.module
 // from the XCPrivacyLintCore target). These tests assert that:
@@ -7,7 +7,7 @@
 //   3. Known-canonical symbol lookups resolve correctly.
 //
 // When Apple announces a new category, add an assertion here that the new
-// category is recognized — the test going green confirms the YAML is in sync
+// category is recognized, the test going green confirms the YAML is in sync
 // with the published list.
 
 import XCTest

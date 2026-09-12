@@ -1,4 +1,4 @@
-// PrivacyManifestReaderTests.swift — fixture-based tests for plist parsing.
+// PrivacyManifestReaderTests.swift: fixture-based tests for plist parsing.
 //
 // Writes a synthetic PrivacyInfo.xcprivacy to a temp file, parses it, asserts
 // the decoded model matches. Catches breaking changes to PropertyListDecoder

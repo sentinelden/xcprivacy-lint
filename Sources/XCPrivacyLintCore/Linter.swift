@@ -1,4 +1,4 @@
-// Linter.swift — the public entry point of the static-analysis core.
+// Linter.swift: the public entry point of the static-analysis core.
 //
 // Top-down call shape:
 //   1. CLI hands us a BinaryAnalysisJob
@@ -19,9 +19,9 @@ public enum LinterError: Error {
 }
 
 public enum Severity: String, Sendable, Codable, Hashable {
-    case error          // hard finding — would fail App Store review
-    case warning        // soft finding — over-declared category, unused reason
-    case info           // neutral — successful match, surfaced under --verbose
+    case error          // hard finding, would fail App Store review
+    case warning        // soft finding, over-declared category, unused reason
+    case info           // neutral, successful match, surfaced under --verbose
 }
 
 public enum FindingKind: String, Sendable, Codable, Hashable {

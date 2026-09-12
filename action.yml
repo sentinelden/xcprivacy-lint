@@ -94,7 +94,7 @@ runs:
         echo "report=${{ inputs.output }}" >> "$GITHUB_OUTPUT"
         echo "exit-code=$code" >> "$GITHUB_OUTPUT"
 
-        # 64 and 65 are usage and input errors — always fatal, since they mean
+        # 64 and 65 are usage and input errors, always fatal, since they mean
         # the check did not actually run.
         if [ "$code" -ge 64 ]; then
           echo "::error::xcprivacy-lint could not run (exit $code)"

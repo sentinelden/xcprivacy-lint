@@ -15,20 +15,20 @@ xcprivacy-lint 0.1.0 · checking MyApp.ipa
          Triggered by symbol `getattrlist` (called in __TEXT section).
          Add the category with reason 3B52.1 or C617.1 to your manifest.
 
-[ OK ]   NSPrivacyAccessedAPICategorySystemBootTime — declared with reason 35F9.1.
+[ OK ]   NSPrivacyAccessedAPICategorySystemBootTime, declared with reason 35F9.1.
 ```
 
 ## Why
 
-Every iOS app since iOS 17 must ship a `PrivacyInfo.xcprivacy` manifest declaring its use of Apple's required-reason API categories. Apple's reviewer catches missing declarations on submission and rejects the build — a 24-hour-plus feedback loop you discover *after* pushing to TestFlight.
+Every iOS app since iOS 17 must ship a `PrivacyInfo.xcprivacy` manifest declaring its use of Apple's required-reason API categories. Apple's reviewer catches missing declarations on submission and rejects the build, a 24-hour-plus feedback loop you discover *after* pushing to TestFlight.
 
 `xcprivacy-lint` closes that loop locally: scans your `.app`, `.ipa`, `.xcframework`, or `.xcarchive`, compares the binary's API surface against the manifest, and reports findings in under 10 seconds.
 
 ## Status
 
-**v0.2 — working.** Parses thin and fat Mach-O (32- and 64-bit, both endiannesses), resolves `.app`, `.ipa`, `.xcframework` and `.xcarchive` inputs, and reports missing declarations, over-declarations and invalid reason codes. The symbol reader is verified against `nm` in the test suite.
+**v0.2, working.** Parses thin and fat Mach-O (32- and 64-bit, both endiannesses), resolves `.app`, `.ipa`, `.xcframework` and `.xcarchive` inputs, and reports missing declarations, over-declarations and invalid reason codes. The symbol reader is verified against `nm` in the test suite.
 
-Category coverage is deliberately narrow — the five categories Apple publishes — and extending it is a one-file PR. See [Contributing](#contributing).
+Category coverage is deliberately narrow (the five categories Apple publishes) and extending it is a one-file PR. See [Contributing](#contributing).
 
 ## Install
 
@@ -71,9 +71,9 @@ xcprivacy-lint --binary ./build/MyApp.app/MyApp --dump-symbols | grep statfs
 
 | Code | Meaning |
 |------|---------|
-| `0`  | Clean — no findings |
+| `0`  | Clean, no findings |
 | `1`  | Soft findings only (over-declared categories) |
-| `2`  | Hard findings — would fail App Store review |
+| `2`  | Hard findings, would fail App Store review |
 | `64` | Usage / argument error |
 | `65` | Unparseable input |
 
@@ -81,9 +81,9 @@ xcprivacy-lint --binary ./build/MyApp.app/MyApp --dump-symbols | grep statfs
 
 For each of Apple's [required-reason API categories](https://developer.apple.com/documentation/bundleresources/privacy_manifest_files/describing_use_of_required_reason_api):
 
-- **Missing declaration** — the binary calls a category symbol but the manifest does not declare the category. Hard finding (Apple rejects).
-- **Over-declaration** — the manifest declares a category but the binary touches no matching symbol. Soft warning.
-- **Invalid reason code** — the manifest declares a reason code not valid for the category. Hard finding.
+- **Missing declaration**: the binary calls a category symbol but the manifest does not declare the category. Hard finding (Apple rejects).
+- **Over-declaration**: the manifest declares a category but the binary touches no matching symbol. Soft warning.
+- **Invalid reason code**: the manifest declares a reason code not valid for the category. Hard finding.
 
 Currently-supported categories:
 
@@ -93,7 +93,7 @@ Currently-supported categories:
 - `NSPrivacyAccessedAPICategoryActiveKeyboards`
 - `NSPrivacyAccessedAPICategoryUserDefaults`
 
-The symbol → category mapping lives at [`Sources/XCPrivacyLintCore/Resources/symbols.yaml`](./Sources/XCPrivacyLintCore/Resources/symbols.yaml). Updates as Apple announces new categories are PRs to that single file — no Swift code changes needed.
+The symbol → category mapping lives at [`Sources/XCPrivacyLintCore/Resources/symbols.yaml`](./Sources/XCPrivacyLintCore/Resources/symbols.yaml). Updates as Apple announces new categories are PRs to that single file, no Swift code changes needed.
 
 ## What it does NOT do
 
@@ -168,9 +168,9 @@ Three independently-testable layers: input extraction, static analysis core (`XC
 
 PRs welcome. The most valuable contributions today are:
 
-1. **Symbol coverage** — adding entries to `Resources/symbols.yaml` for categories or symbols we missed. Each addition should reference Apple's docs and include a test asserting a known binary triggers the lookup.
-2. **Objective-C precision** — selectors are currently matched without their receiving class, because recovering the receiver means walking `__objc_selrefs` back through class metadata. Distinctive selectors make this sound in practice, but a binary that defines its own `-systemUptime` would produce a false positive. A correct receiver walk would close that gap.
-3. **Output formats** — plain markdown for PR-comment bots; a Danger plugin.
+1. **Symbol coverage**: adding entries to `Resources/symbols.yaml` for categories or symbols we missed. Each addition should reference Apple's docs and include a test asserting a known binary triggers the lookup.
+2. **Objective-C precision**: selectors are currently matched without their receiving class, because recovering the receiver means walking `__objc_selrefs` back through class metadata. Distinctive selectors make this sound in practice, but a binary that defines its own `-systemUptime` would produce a false positive. A correct receiver walk would close that gap.
+3. **Output formats**: plain markdown for PR-comment bots; a Danger plugin.
 
 Run the test suite:
 
@@ -184,4 +184,4 @@ MIT. See [`LICENSE`](./LICENSE).
 
 ## Who builds this
 
-[Sentinel Den](https://sentinelden.com) — iOS security research and runtime-defense SDKs from Vancouver, BC. We ship four commercial iOS SDKs ([SentinelSDK](https://sentinelden.com/sdk/sentinel), [CryptoShield](https://sentinelden.com/sdk/cryptoshield), [AgenticGuard](https://sentinelden.com/sdk/agenticguard), [EnclaveVault](https://sentinelden.com/sdk/enclavevault)) and the [Sentinel Studio](https://sentinelden.com/studio) macOS auditor. xcprivacy-lint is our open-source flank — same engineering rigor, MIT-licensed.
+[Sentinel Den](https://sentinelden.com): iOS security research and runtime-defense SDKs from Vancouver, BC. We ship four commercial iOS SDKs ([SentinelSDK](https://sentinelden.com/sdk/sentinel), [CryptoShield](https://sentinelden.com/sdk/cryptoshield), [AgenticGuard](https://sentinelden.com/sdk/agenticguard), [EnclaveVault](https://sentinelden.com/sdk/enclavevault)) and the [Sentinel Studio](https://sentinelden.com/studio) macOS auditor. xcprivacy-lint is our open-source flank: same engineering rigor, MIT-licensed.
