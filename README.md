@@ -98,7 +98,9 @@ Two consequences, and the second one matters more:
 - **Over-declaration warnings can be false positives.** A category you declare correctly may be reported as unused because the call that justifies it is invisible.
 - **Missing-declaration errors can be false negatives.** If your only use of a category is through an inlined Swift call, this tool will not flag the missing declaration, and App Store review still will.
 
-Measured on five production apps: of seven over-declaration warnings, two were false positives, both caused by `URL.resourceValues(forKeys:)` reads of `volumeAvailableCapacityForImportantUsageKey`.
+Measured on eight production apps: of twelve over-declaration warnings, **four were false positives**, every one of them caused by a `URL.resourceValues(forKeys:)` read that the binary does not record. Three were `volumeAvailableCapacityForImportantUsageKey` (disk space) and one was `contentModificationDateKey` (file timestamp). That call pattern appeared in five of the eight apps, so this is the common case in Swift code rather than an edge case.
+
+The one hard error the tool reported in that run was a true positive: an app shipping no manifest at all while calling `NSUserDefaults.boolForKey:`. Objective-C-bridged APIs are exactly where this approach still works.
 
 So treat a clean run as "no problems I can see in the binary", not as "this manifest is correct". Closing the gap needs source-level analysis rather than binary analysis; see [Contributing](#contributing).
 
