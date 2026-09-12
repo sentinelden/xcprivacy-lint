@@ -7,8 +7,7 @@
 //   4. PrivacyManifestReader parses the declared categories
 //   5. We diff the two sets and produce Finding values
 //
-// Everything below this header is intentionally a stub. See DESIGN.md §5 for
-// the architecture and §9 for the v0.1 roadmap.
+// See DESIGN.md §5 for the architecture.
 
 import Foundation
 
@@ -74,22 +73,33 @@ public struct Linter {
     ///
     /// - Throws: `LinterError` on unparseable input.
     public func run(job: BinaryAnalysisJob, strict: Bool = false) throws -> LintReport {
-        // TODO(v0.1):
-        //   let machO = try MachOReader(path: job.binaryPath).parse()
-        //   let resolver = try CategoryResolver()
-        //   let needed: Set<RequiredCategory> = resolver.resolve(machO)
-        //   let declared: PrivacyManifest = job.manifestPath
-        //       .map { try PrivacyManifestReader().read(path: $0) }
-        //       ?? .empty
-        //   return Differ.report(target: job.binaryPath,
-        //                        manifestPath: job.manifestPath,
-        //                        needed: needed,
-        //                        declared: declared,
-        //                        strict: strict)
-        return LintReport(
+        let references = try MachOReader(path: job.binaryPath).parse()
+        let resolver = try CategoryResolver()
+        let needed = resolver.resolve(references)
+
+        // A bundle with no PrivacyInfo.xcprivacy is legal only when it touches
+        // no required-reason API. Treating a missing manifest as an empty one
+        // gives exactly that behaviour: zero findings when the binary is
+        // clean, and a full set of missing-declaration errors when it is not.
+        let declared: PrivacyManifest
+        if let manifestPath = job.manifestPath {
+            do {
+                declared = try PrivacyManifestReader().read(path: manifestPath)
+            } catch {
+                throw LinterError.manifestNotReadable(path: manifestPath)
+            }
+        } else {
+            declared = .empty
+        }
+
+        return Differ.report(
             target: job.binaryPath,
             manifestPath: job.manifestPath,
-            findings: []
+            needed: needed,
+            declared: declared,
+            resolver: resolver,
+            strict: strict
         )
     }
+
 }
