@@ -1,6 +1,6 @@
 # xcprivacy-lint
 
-> Validate your iOS app's `PrivacyInfo.xcprivacy` against the API surface its binary actually touches. Catches missing and over-declared required-reason categories before App Store review does.
+> Validate your iOS app's `PrivacyInfo.xcprivacy` against the API surface its binary actually touches. Catches a real class of manifest mistake before App Store review does, with [known limits](#what-it-can-and-cannot-see) on Swift-native calls.
 
 [![CI](https://github.com/sentinelden/xcprivacy-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/sentinelden/xcprivacy-lint/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -85,6 +85,23 @@ For each of Apple's [required-reason API categories](https://developer.apple.com
 - **Over-declaration**: the manifest declares a category but the binary touches no matching symbol. Soft warning.
 - **Invalid reason code**: the manifest declares a reason code not valid for the category. Hard finding.
 
+### What it can and cannot see
+
+This is binary analysis. It reads the Objective-C selectors and imported symbols present in the compiled image, and it can only report what is actually there.
+
+**It sees APIs that go through the Objective-C runtime.** `UserDefaults.standard` leaves `standardUserDefaults`; `FileManager.attributesOfItem(atPath:)` leaves `attributesOfItemAtPath:error:`. These match reliably.
+
+**It cannot see Swift-native Foundation calls that the compiler inlines.** The clearest example is `URL.resourceValues(forKeys:)`, the idiomatic way to read disk space and file timestamps in Swift. It leaves no selector, no imported symbol, and no string in the binary. There is nothing to match on, and no addition to `symbols.yaml` can change that.
+
+Two consequences, and the second one matters more:
+
+- **Over-declaration warnings can be false positives.** A category you declare correctly may be reported as unused because the call that justifies it is invisible.
+- **Missing-declaration errors can be false negatives.** If your only use of a category is through an inlined Swift call, this tool will not flag the missing declaration, and App Store review still will.
+
+Measured on five production apps: of seven over-declaration warnings, two were false positives, both caused by `URL.resourceValues(forKeys:)` reads of `volumeAvailableCapacityForImportantUsageKey`.
+
+So treat a clean run as "no problems I can see in the binary", not as "this manifest is correct". Closing the gap needs source-level analysis rather than binary analysis; see [Contributing](#contributing).
+
 Currently-supported categories:
 
 - `NSPrivacyAccessedAPICategoryFileTimestamp`
@@ -99,7 +116,7 @@ The symbol → category mapping lives at [`Sources/XCPrivacyLintCore/Resources/s
 
 - **Dynamic analysis.** No spawning, no debugger attachment, no runtime observation. Static analysis is what Apple uses; matching that surface is enough.
 - **General iOS privacy compliance scoring.** Findings only, no "you scored 87%."
-- **Replacement for Apple's submission validator.** We approximate well enough to catch common failures before submission; Apple is authoritative.
+- **Replacement for Apple's submission validator.** We approximate well enough to catch common failures before submission; Apple is authoritative. See [What it can and cannot see](#what-it-can-and-cannot-see) for where the approximation breaks down.
 
 See [`DESIGN.md` §3](./DESIGN.md#3-non-goals) for the full non-goals list.
 
@@ -169,8 +186,9 @@ Three independently-testable layers: input extraction, static analysis core (`XC
 PRs welcome. The most valuable contributions today are:
 
 1. **Symbol coverage**: adding entries to `Resources/symbols.yaml` for categories or symbols we missed. Each addition should reference Apple's docs and include a test asserting a known binary triggers the lookup.
-2. **Objective-C precision**: selectors are currently matched without their receiving class, because recovering the receiver means walking `__objc_selrefs` back through class metadata. Distinctive selectors make this sound in practice, but a binary that defines its own `-systemUptime` would produce a false positive. A correct receiver walk would close that gap.
-3. **Output formats**: plain markdown for PR-comment bots; a Danger plugin.
+2. **Source-level analysis.** The largest accuracy gap is Swift-native Foundation calls that inline away, leaving nothing in the binary. A SwiftSyntax pass over the source could find `URL.resourceValues(forKeys:)` and friends and cross-check them against the manifest, turning today's false positives and false negatives into real findings. This is the single most valuable thing anyone could add.
+3. **Objective-C precision**: selectors are currently matched without their receiving class, because recovering the receiver means walking `__objc_selrefs` back through class metadata. Distinctive selectors make this sound in practice, but a binary that defines its own `-systemUptime` would produce a false positive. A correct receiver walk would close that gap.
+4. **Output formats**: plain markdown for PR-comment bots; a Danger plugin.
 
 Run the test suite:
 
