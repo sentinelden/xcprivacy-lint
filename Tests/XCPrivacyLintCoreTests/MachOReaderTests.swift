@@ -82,6 +82,22 @@ final class MachOReaderTests: XCTestCase {
                       "symbols nm found that we missed: \(expected.subtracting(ours).sorted())")
     }
 
+    /// A thin arm64 image must report "arm64", not a byte-swapped cputype.
+    ///
+    /// The fat header is big-endian on disk and the thin header is not, so
+    /// reusing the fat-header read here inverted the byte order and produced
+    /// labels like "cpu(201326593)" (0x0C000001, which is 0x0100000C swapped).
+    func testThinBinaryReportsCorrectArchitecture() throws {
+        try XCTSkipUnless(Fixture.clangAvailable, "clang not available")
+        let app = try Fixture.makeApp(manifest: nil)
+
+        let refs = try MachOReader(path: app.binaryPath).parse()
+        XCTAssertFalse(refs.architectures.contains { $0.hasPrefix("cpu(") },
+                       "unrecognised cputype, got \(refs.architectures)")
+        XCTAssertTrue(refs.architectures.allSatisfy { ["arm64", "arm64e", "x86_64", "i386", "arm"].contains($0) },
+                      "unexpected architecture names: \(refs.architectures)")
+    }
+
     func testRejectsNonMachOInput() throws {
         let path = NSTemporaryDirectory() + "/not-a-binary-\(UUID().uuidString).txt"
         try "this is plainly not a Mach-O image".write(toFile: path, atomically: true, encoding: .utf8)

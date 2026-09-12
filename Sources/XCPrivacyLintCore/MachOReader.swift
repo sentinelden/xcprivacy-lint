@@ -137,11 +137,23 @@ public struct MachOReader {
             }
 
         case 0xfeed_face, 0xfeed_facf, 0xcefa_edfe, 0xcffa_edfe:
-            // Thin image. Re-read the cputype from the header itself so the
-            // architecture label is right.
-            let swapped = (magic == 0xcefa_edfe || magic == 0xcffa_edfe)
-            let cpuType = Int32(bitPattern: data.readUInt32(at: 4, bigEndian: !swapped ? false : true))
-            let cpuSubtype = Int32(bitPattern: data.readUInt32(at: 8, bigEndian: !swapped ? false : true))
+            // Thin image.
+            //
+            // `magic` above was read big-endian because a fat header is always
+            // big-endian on disk. A thin header is not, so that value cannot be
+            // reused to decide byte order here: for a little-endian image the
+            // big-endian read yields 0xCFFAEDFE, which looks like the
+            // byte-swapped case and inverts every field read after it. Read the
+            // magic natively instead, exactly as parseSlice does.
+            let native = data.readUInt32(at: 0, bigEndian: false)
+            let swap: Bool
+            switch native {
+            case 0xfeed_face, 0xfeed_facf: swap = false
+            case 0xcefa_edfe, 0xcffa_edfe: swap = true
+            default: throw LinterError.unsupportedMachOFormat
+            }
+            let cpuType = Int32(bitPattern: data.readUInt32(at: 4, bigEndian: swap))
+            let cpuSubtype = Int32(bitPattern: data.readUInt32(at: 8, bigEndian: swap))
             return [Slice(offset: 0,
                           architecture: architectureName(cpuType: cpuType, subtype: cpuSubtype))]
 
