@@ -17,7 +17,7 @@ import ArgumentParser
 import Foundation
 import XCPrivacyLintCore
 
-let toolVersion = "0.2.0"
+let toolVersion = "0.3.0"
 
 @main
 struct XCPrivacyLint: ParsableCommand {
