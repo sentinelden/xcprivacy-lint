@@ -189,7 +189,7 @@ PRs welcome. The most valuable contributions today are:
 
 1. **Symbol coverage**: adding entries to `Resources/symbols.yaml` for categories or symbols we missed. Each addition should reference Apple's docs and include a test asserting a known binary triggers the lookup.
 2. **Source-level analysis.** The largest accuracy gap is Swift-native Foundation calls that inline away, leaving nothing in the binary. A SwiftSyntax pass over the source could find `URL.resourceValues(forKeys:)` and friends and cross-check them against the manifest, turning today's false positives and false negatives into real findings. This is the single most valuable thing anyone could add.
-3. **Objective-C precision**: selectors are currently matched without their receiving class, because recovering the receiver means walking `__objc_selrefs` back through class metadata. Distinctive selectors make this sound in practice, but a binary that defines its own `-systemUptime` would produce a false positive. A correct receiver walk would close that gap.
+3. **Objective-C precision**: selectors are matched without their receiving class, because recovering the receiver means walking `__objc_selrefs` back through class metadata. A selector counts for certain only when the binary also imports its class (`objectForKey:` belongs to `NSDictionary` and `NSCache` as well as `NSUserDefaults`); otherwise a missing declaration is reported as a warning, not an error. A binary that defines its own `-systemUptime` and references `NSProcessInfo` would still produce a false positive. A correct receiver walk would close that gap.
 4. **Output formats**: plain markdown for PR-comment bots; a Danger plugin.
 
 Run the test suite:
