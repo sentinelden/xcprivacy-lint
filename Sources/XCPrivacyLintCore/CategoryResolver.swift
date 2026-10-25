@@ -26,6 +26,10 @@ public struct ResolvedCategory: Sendable, Hashable {
     public let category: APICategory
     public let trigger: FindingTrigger
     public let suggestedReasons: [String]
+    /// False for a selector whose owning class the binary never references:
+    /// `objectForKey:` is NSUserDefaults' but also NSDictionary's and NSCache's,
+    /// so the selector alone does not show a required-reason API is called.
+    public var confident = true
 }
 
 public final class CategoryResolver {
@@ -40,7 +44,8 @@ public final class CategoryResolver {
     /// selectors are distinctive enough (`systemUptime`,
     /// `attributesOfItemAtPath:error:`) that selector-only matching is
     /// sound in practice. Where it is not, the finding is reported at
-    /// lower confidence rather than suppressed.
+    /// lower confidence rather than suppressed: `resolve` marks a selector
+    /// whose owning class the binary does not reference as not confident.
     private let selectorIndex: [String: (className: String, category: APICategory)]
     private let entries: [APICategory: CategoryEntry]
 

@@ -3,7 +3,10 @@
 //
 // Four outcomes per category:
 //
-//   needed & !declared  -> .missingDeclaration  (error, App Store will reject)
+//   needed & !declared  -> .missingDeclaration  (error, App Store will reject;
+//                                                a warning when the only evidence
+//                                                is a selector whose class the
+//                                                binary does not reference)
 //   !needed & declared  -> .overDeclared        (warning, harmless but sloppy,
 //                                                and Apple has begun querying
 //                                                declarations with no matching
@@ -44,17 +47,23 @@ extension CategoryResolver {
             )
         }
 
+        // Classes the binary sends messages to by name: a call to an API class
+        // method or initializer imports its class symbol.
+        let referencedClasses = Set(refs.importedSymbols.compactMap { symbol in
+            symbol.name.hasPrefix("OBJC_CLASS_$_") ? String(symbol.name.dropFirst(13)) : nil
+        })
+
         for selector in refs.objcSelectors {
             guard let hit = category(forSelector: selector) else { continue }
-            resolved.insert(
-                ResolvedCategory(
-                    category: hit.category,
-                    trigger: FindingTrigger(kind: .objcMethod,
-                                            name: "\(hit.className).\(selector)",
-                                            section: "__objc_methname"),
-                    suggestedReasons: validReasons(for: hit.category).sorted()
-                )
+            var item = ResolvedCategory(
+                category: hit.category,
+                trigger: FindingTrigger(kind: .objcMethod,
+                                        name: "\(hit.className).\(selector)",
+                                        section: "__objc_methname"),
+                suggestedReasons: validReasons(for: hit.category).sorted()
             )
+            item.confident = referencedClasses.contains(hit.className)
+            resolved.insert(item)
         }
 
         return resolved
@@ -103,11 +112,35 @@ public enum Differ {
         for type in neededTypes.subtracting(declaredTypes).sorted() {
             let category = APICategory(type)
             let triggers = (evidence[category] ?? []).sorted { $0.trigger.name < $1.trigger.name }
-            guard let primary = triggers.first else { continue }
+            let confident = triggers.filter(\.confident)
+            guard let primary = confident.first ?? triggers.first else { continue }
 
             let others = triggers.count - 1
             let alsoVia = others > 0 ? " (and \(others) other reference\(others == 1 ? "" : "s"))" : ""
             let reasons = primary.suggestedReasons
+            let advice = "\(reasons.isEmpty ? "an appropriate reason" : "reason " + oxfordJoin(reasons))"
+
+            // Only selectors whose class the binary never references: a
+            // warning, since another class may answer the same selector.
+            if confident.isEmpty {
+                let owner = primary.trigger.name.split(separator: ".").first.map(String.init) ?? primary.trigger.name
+                findings.append(
+                    Finding(
+                        severity: .warning,
+                        category: type,
+                        kind: .missingDeclaration,
+                        trigger: primary.trigger,
+                        suggestedReasons: reasons,
+                        message: """
+                            Possibly missing declaration: \(type).
+                            Selector `\(primary.trigger.name)`\(alsoVia) is in the binary, but the binary \
+                            does not reference \(owner), and other classes answer the same selector. \
+                            If the code does call \(owner), add the category with \(advice).
+                            """
+                    )
+                )
+                continue
+            }
 
             findings.append(
                 Finding(
@@ -120,8 +153,7 @@ public enum Differ {
                         Missing required declaration: \(type).
                         Triggered by \(primary.trigger.kind == .symbol ? "symbol" : "selector") \
                         `\(primary.trigger.name)`\(alsoVia).
-                        Add the category to your manifest with \
-                        \(reasons.isEmpty ? "an appropriate reason" : "reason " + oxfordJoin(reasons)).
+                        Add the category to your manifest with \(advice).
                         """
                 )
             )

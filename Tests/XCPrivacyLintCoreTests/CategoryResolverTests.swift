@@ -19,6 +19,32 @@ final class CategoryResolverTests: XCTestCase {
         _ = try CategoryResolver()
     }
 
+    // `objectForKey:` is NSUserDefaults' and also NSDictionary's and NSCache's.
+    // A binary that only uses NSCache was told it was missing the UserDefaults
+    // declaration, as a hard error. Without the class it is now a warning.
+    func testASelectorWhoseClassIsNotReferencedIsOnlyAWarning() throws {
+        let resolver = try CategoryResolver()
+        func report(classes: [String]) -> LintReport {
+            let refs = MachOSymbolReferences(
+                importedSymbols: Set(classes.map { ImportedSymbol(name: "OBJC_CLASS_$_\($0)") }),
+                objcSelectors: ["objectForKey:", "setObject:forKey:"],
+                architectures: ["arm64"])
+            return Differ.report(target: "t", manifestPath: nil, needed: resolver.resolve(refs),
+                                 declared: .empty, resolver: resolver, strict: false)
+        }
+        let userDefaults = "NSPrivacyAccessedAPICategoryUserDefaults"
+
+        let cacheOnly = report(classes: ["NSCache", "NSDictionary"])
+        let soft = try XCTUnwrap(cacheOnly.findings.first { $0.category == userDefaults })
+        XCTAssertEqual(soft.severity, .warning)
+        XCTAssertTrue(soft.message.hasPrefix("Possibly missing declaration"), soft.message)
+        XCTAssertEqual(cacheOnly.exitCode, 1)
+
+        let defaults = report(classes: ["NSCache", "NSUserDefaults"])
+        XCTAssertEqual(defaults.findings.first { $0.category == userDefaults }?.severity, .error)
+        XCTAssertEqual(defaults.exitCode, 2)
+    }
+
     func testAllPublishedCategoriesPresent() throws {
         let resolver = try CategoryResolver()
         let published: Set<APICategory> = [
