@@ -40,7 +40,7 @@ public final class CategoryResolver {
     /// The Mach-O __objc_methname section gives us selectors without the
     /// class they are sent to, recovering the receiver would mean walking
     /// __objc_selrefs back through the class metadata, which is not
-    /// reliable across optimisation levels. Apple's required-reason
+    /// reliable across optimization levels. Apple's required-reason
     /// selectors are distinctive enough (`systemUptime`,
     /// `attributesOfItemAtPath:error:`) that selector-only matching is
     /// sound in practice. Where it is not, the finding is reported at
