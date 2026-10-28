@@ -127,7 +127,7 @@ The map is loaded once per run and queried per-symbol.
 
 Takes the diff result and emits findings in one of three formats:
 
-- **`text` (default)**: coloured human-readable output, grouped by severity
+- **`text` (default)**: colored human-readable output, grouped by severity
 - **`json`**: schema-stable JSON for CI tooling
 - **`github-actions`**: `::warning file=...,line=...::msg` annotations consumed by GitHub Actions UI
 

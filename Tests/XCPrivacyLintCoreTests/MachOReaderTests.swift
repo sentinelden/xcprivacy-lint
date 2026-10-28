@@ -1,5 +1,5 @@
 // MachOReaderTests.swift: the reader is the foundation of every finding, so
-// these tests pin its behaviour against a real compiled binary and against
+// these tests pin its behavior against a real compiled binary and against
 // `nm`, which is the ground truth users will compare us to.
 
 import XCTest

@@ -26,6 +26,10 @@ public struct ResolvedCategory: Sendable, Hashable {
     public let category: APICategory
     public let trigger: FindingTrigger
     public let suggestedReasons: [String]
+    /// False for a selector whose owning class the binary never references:
+    /// `objectForKey:` is NSUserDefaults' but also NSDictionary's and NSCache's,
+    /// so the selector alone does not show a required-reason API is called.
+    public var confident = true
 }
 
 public final class CategoryResolver {
@@ -36,11 +40,12 @@ public final class CategoryResolver {
     /// The Mach-O __objc_methname section gives us selectors without the
     /// class they are sent to, recovering the receiver would mean walking
     /// __objc_selrefs back through the class metadata, which is not
-    /// reliable across optimisation levels. Apple's required-reason
+    /// reliable across optimization levels. Apple's required-reason
     /// selectors are distinctive enough (`systemUptime`,
     /// `attributesOfItemAtPath:error:`) that selector-only matching is
     /// sound in practice. Where it is not, the finding is reported at
-    /// lower confidence rather than suppressed.
+    /// lower confidence rather than suppressed: `resolve` marks a selector
+    /// whose owning class the binary does not reference as not confident.
     private let selectorIndex: [String: (className: String, category: APICategory)]
     private let entries: [APICategory: CategoryEntry]
 

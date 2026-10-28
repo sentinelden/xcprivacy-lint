@@ -79,7 +79,7 @@ public struct Linter {
 
         // A bundle with no PrivacyInfo.xcprivacy is legal only when it touches
         // no required-reason API. Treating a missing manifest as an empty one
-        // gives exactly that behaviour: zero findings when the binary is
+        // gives exactly that behavior: zero findings when the binary is
         // clean, and a full set of missing-declaration errors when it is not.
         let declared: PrivacyManifest
         if let manifestPath = job.manifestPath {
